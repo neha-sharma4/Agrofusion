@@ -1,0 +1,335 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  FARMER
+  ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum FieldStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum CropCycleStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum Urgency {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum KnowledgeCategory {
+  SUITABILITY
+  DISEASE
+  IRRIGATION
+  TREATMENT
+}
+
+model User {
+  id                String        @id @default(cuid())
+  name              String
+  email             String        @unique
+  phone             String
+  passwordHash      String        @map("password_hash")
+  role              Role          @default(FARMER)
+  preferredLanguage String        @default("en") @map("preferred_language")
+  isEmailVerified   Boolean       @default(false) @map("is_email_verified")
+  accountStatus     AccountStatus @default(ACTIVE) @map("account_status")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  otpVerifications OtpVerification[]
+  passwordResets   PasswordReset[]
+  refreshTokens    RefreshToken[]
+  fields           Field[]
+  feedback         Feedback[]
+
+  @@map("users")
+}
+
+model OtpVerification {
+  id           String   @id @default(cuid())
+  userId       String   @map("user_id")
+  otpCodeHash  String   @map("otp_code_hash")
+  expiresAt    DateTime @map("expires_at")
+  attemptCount Int      @default(0) @map("attempt_count")
+  lastSentAt   DateTime @default(now()) @map("last_sent_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("otp_verifications")
+}
+
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_resets")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Field {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  name      String
+  status    FieldStatus @default(ACTIVE)
+  latitude  Float?
+  longitude Float?
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cropCycles CropCycle[]
+
+  @@index([userId])
+  @@map("fields")
+}
+
+model Crop {
+  id         String  @id @default(cuid())
+  name       String  @unique
+  nameLocal  String? @map("name_local")
+  category   String
+  iconKey    String  @default("crop") @map("icon_key")
+  isActive   Boolean @default(true) @map("is_active")
+
+  cropCycles      CropCycle[]
+  growthStages    GrowthStage[]
+  knowledgeItems  KnowledgeItem[]
+
+  @@map("crops")
+}
+
+model SoilType {
+  id        String  @id @default(cuid())
+  name      String  @unique
+  nameLocal String? @map("name_local")
+  isActive  Boolean @default(true) @map("is_active")
+
+  cropCycles CropCycle[]
+
+  @@map("soil_types")
+}
+
+model AgroClimaticRegion {
+  id            String  @id @default(cuid())
+  name          String  @unique
+  nameLocal     String? @map("name_local")
+  statesCovered String  @map("states_covered")
+  isActive      Boolean @default(true) @map("is_active")
+
+  cropCycles CropCycle[]
+
+  @@map("agro_climatic_regions")
+}
+
+model GrowthStage {
+  id        String  @id @default(cuid())
+  cropId    String? @map("crop_id")
+  name      String
+  sortOrder Int     @map("sort_order")
+
+  crop                      Crop?                       @relation(fields: [cropId], references: [id], onDelete: Cascade)
+  irrigationRecommendations IrrigationRecommendation[]
+
+  @@index([cropId])
+  @@map("growth_stages")
+}
+
+model CropCycle {
+  id         String           @id @default(cuid())
+  fieldId    String           @map("field_id")
+  cropId     String           @map("crop_id")
+  soilTypeId String           @map("soil_type_id")
+  regionId   String           @map("region_id")
+  startDate  DateTime         @map("start_date")
+  endDate    DateTime?        @map("end_date")
+  status     CropCycleStatus  @default(ACTIVE)
+  createdAt  DateTime         @default(now()) @map("created_at")
+
+  field   Field             @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  crop    Crop              @relation(fields: [cropId], references: [id])
+  soil    SoilType          @relation(fields: [soilTypeId], references: [id])
+  region  AgroClimaticRegion @relation(fields: [regionId], references: [id])
+
+  suitabilityChecks          SuitabilityCheck[]
+  irrigationRecommendations  IrrigationRecommendation[]
+  diseaseScans               DiseaseScan[]
+
+  @@index([fieldId])
+  @@index([cropId])
+  @@map("crop_cycles")
+}
+
+model SuitabilityCheck {
+  id               String   @id @default(cuid())
+  cropCycleId      String   @map("crop_cycle_id")
+  isSuitable       Boolean  @map("is_suitable")
+  confidence       Float
+  reasoning        String
+  alternativesJson Json?    @map("alternatives_json")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  cropCycle CropCycle @relation(fields: [cropCycleId], references: [id], onDelete: Cascade)
+
+  @@index([cropCycleId])
+  @@map("suitability_checks")
+}
+
+model IrrigationRecommendation {
+  id                       String   @id @default(cuid())
+  cropCycleId              String   @map("crop_cycle_id")
+  growthStageId            String   @map("growth_stage_id")
+  soilMoisturePct          Float    @map("soil_moisture_pct")
+  temperatureC             Float    @map("temperature_c")
+  humidityPct              Float    @map("humidity_pct")
+  forecastJson             Json?    @map("forecast_json")
+  plotAreaSqM              Float    @map("plot_area_sq_m")
+  recommendedAmountMm      Float    @map("recommended_amount_mm")
+  recommendedVolumeLiters  Float    @map("recommended_volume_liters")
+  irrigationRequired       Boolean  @map("irrigation_required")
+  urgency                  Urgency
+  reasoning                String
+  weatherAutoFetched       Boolean  @default(false) @map("weather_auto_fetched")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  cropCycle   CropCycle   @relation(fields: [cropCycleId], references: [id], onDelete: Cascade)
+  growthStage GrowthStage @relation(fields: [growthStageId], references: [id])
+
+  @@index([cropCycleId])
+  @@map("irrigation_recommendations")
+}
+
+model DiseaseScan {
+  id                       String   @id @default(cuid())
+  cropCycleId              String   @map("crop_cycle_id")
+  imageKey                 String   @map("image_key")
+  status                   String
+  imageRelevant            Boolean? @map("image_relevant")
+  cropMatch                Boolean? @map("crop_match")
+  imageQualitySufficient   Boolean? @map("image_quality_sufficient")
+  isHealthy                Boolean? @map("is_healthy")
+  diseaseCommonName        String?  @map("disease_common_name")
+  diseaseScientificName    String?  @map("disease_scientific_name")
+  riskLevel                String?  @map("risk_level")
+  treatmentJson            Json?    @map("treatment_json")
+  consequencesIfUntreated  String?  @map("consequences_if_untreated")
+  precautionsJson          Json?    @map("precautions_json")
+  probableCause            String?  @map("probable_cause")
+  confidence               Float?
+  visibleSymptomsJson      Json?    @map("visible_symptoms_json")
+  message                  String
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  cropCycle CropCycle @relation(fields: [cropCycleId], references: [id], onDelete: Cascade)
+
+  @@index([cropCycleId])
+  @@map("disease_scans")
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  relatedType String   @map("related_type")
+  relatedId   String   @map("related_id")
+  rating      String
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([relatedType, relatedId])
+  @@map("feedback")
+}
+
+model LlmLog {
+  id                String   @id @default(cuid())
+  endpoint          String
+  userId            String?  @map("user_id")
+  inputPayload      Json     @map("input_payload")
+  outputPayload     Json?    @map("output_payload")
+  confidence        Float?
+  latencyMs         Int      @map("latency_ms")
+  validationStatus  String   @map("validation_status")
+  flaggedForReview  Boolean  @default(false) @map("flagged_for_review")
+  errorMessage      String?  @map("error_message")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([endpoint])
+  @@index([flaggedForReview])
+  @@map("llm_logs")
+}
+
+model KnowledgeItem {
+  id                      String             @id @default(cuid())
+  category                KnowledgeCategory
+  cropId                  String?            @map("crop_id")
+  diseaseKey              String?            @map("disease_key")
+  diseaseCommonName       String?            @map("disease_common_name")
+  diseaseScientificName   String?            @map("disease_scientific_name")
+  title                   String
+  content                 String
+  sourceName              String             @map("source_name")
+  sourceUrl               String?            @map("source_url")
+  soilTypeName            String?            @map("soil_type_name")
+  regionName              String?            @map("region_name")
+  medicineName            String?            @map("medicine_name")
+  dosage                  String?
+  applicationMethod       String?            @map("application_method")
+  timingFrequency         String?            @map("timing_frequency")
+  precautionsJson         Json?              @map("precautions_json")
+  consequencesIfUntreated String?            @map("consequences_if_untreated")
+  probableCause           String?            @map("probable_cause")
+  typicalDepthMm          Float?             @map("typical_depth_mm")
+  moistureNote            String?            @map("moisture_note")
+  isVerified              Boolean            @default(true) @map("is_verified")
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  crop Crop? @relation(fields: [cropId], references: [id])
+
+  @@index([category])
+  @@index([diseaseKey])
+  @@index([cropId])
+  @@map("knowledge_items")
+}

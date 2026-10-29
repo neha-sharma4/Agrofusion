@@ -1,0 +1,29 @@
+{
+  "name": "agrofusion-ai",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "apps/api",
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev -w @agrofusion/api",
+    "dev:web": "npm run dev -w @agrofusion/web",
+    "build": "npm run build -w @agrofusion/shared && npm run build -w @agrofusion/api && npm run build -w @agrofusion/web",
+    "test": "npm run test -w @agrofusion/api",
+    "test:e2e": "npm run test:e2e -w @agrofusion/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run prisma:generate -w @agrofusion/api",
+    "db:migrate": "npm run prisma:migrate -w @agrofusion/api",
+    "db:seed": "npm run seed -w @agrofusion/api",
+    "seed:admin": "npm run seed:admin -w @agrofusion/api",
+    "seed:admin:reset": "npm run seed:admin:reset -w @agrofusion/api",
+    "db:reset": "npm run db:reset -w @agrofusion/api"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
